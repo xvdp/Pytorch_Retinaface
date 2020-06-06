@@ -1,16 +1,20 @@
 from __future__ import print_function
+import time
 import os
+import os.path as osp
 import argparse
 import torch
 import torch.backends.cudnn as cudnn
 import numpy as np
+import matplotlib.pyplot as plt
+import cv2
+from PIL import Image
 from data import cfg_mnet, cfg_re50
 from layers.functions.prior_box import PriorBox
 from utils.nms.py_cpu_nms import py_cpu_nms
-import cv2
 from models.retinaface import RetinaFace
 from utils.box_utils import decode, decode_landm
-import time
+
 
 parser = argparse.ArgumentParser(description='Retinaface')
 
@@ -24,8 +28,34 @@ parser.add_argument('--nms_threshold', default=0.4, type=float, help='nms_thresh
 parser.add_argument('--keep_top_k', default=750, type=int, help='keep_top_k')
 parser.add_argument('-s', '--save_image', action="store_true", default=True, help='show detection results')
 parser.add_argument('--vis_thres', default=0.6, type=float, help='visualization_threshold')
+parser.add_argument('--numtests', default=1, type=int, help='number of tests')
+parser.add_argument('--image', default=1, type=str, help='image name')
 args = parser.parse_args()
 
+def showboxes(image, bboxes, max_boxes=5000, max_break=None):
+    _mod = len(bboxes)//max_boxes + 1
+    
+    if max_break is not None:
+        _mod = 1
+
+    plt.figure(figsize=(15, 15))
+    plt.imshow(Image.open(image))
+    cmap = plt.cm.get_cmap("hsv", len(bboxes))
+    _j = 0
+    for _i, _b in enumerate(bboxes):
+        if max_break is not None and _i >= max_break:
+            break
+        if _j >= max_boxes:
+            break 
+
+        if not _i%_mod:
+            _h = _b[2] - _b[0]
+            _w = _b[3] - _b[1]
+            _p = plt.Rectangle((_b[0], _b[1]), _h, _w, fill=False,
+                               color=cmap(np.random.randint(0, len(bboxes))))
+            plt.gca().add_patch(_p)
+            _j+=1
+    plt.show()
 
 def check_keys(model, pretrained_state_dict):
     ckpt_keys = set(pretrained_state_dict.keys())
@@ -62,7 +92,6 @@ def load_model(model, pretrained_path, load_to_cpu):
     model.load_state_dict(pretrained_dict, strict=False)
     return model
 
-
 if __name__ == '__main__':
     torch.set_grad_enabled(False)
     cfg = None
@@ -74,17 +103,20 @@ if __name__ == '__main__':
     net = RetinaFace(cfg=cfg, phase = 'test')
     net = load_model(net, args.trained_model, args.cpu)
     net.eval()
-    print('Finished loading model!')
-    print(net)
+    # print('Finished loading model!')
+    # print(net)
     cudnn.benchmark = True
     device = torch.device("cpu" if args.cpu else "cuda")
     net = net.to(device)
 
     resize = 1
 
+    image_path = args.image
+    osp.isfile(image_path)
+
     # testing begin
-    for i in range(100):
-        image_path = "./curve/test.jpg"
+    for i in range(args.numtests):
+        # image_path = "./curve/test.jpg"
         img_raw = cv2.imread(image_path, cv2.IMREAD_COLOR)
 
         img = np.float32(img_raw)
@@ -98,16 +130,24 @@ if __name__ == '__main__':
         scale = scale.to(device)
 
         tic = time.time()
+        print("image", img.shape, img.min(), img.max())
         loc, conf, landms = net(img)  # forward pass
         print('net forward time: {:.4f}'.format(time.time() - tic))
+        print(loc.shape, conf.shape, landms.shape)
 
         priorbox = PriorBox(cfg, image_size=(im_height, im_width))
         priors = priorbox.forward()
         priors = priors.to(device)
+
         prior_data = priors.data
+
         boxes = decode(loc.data.squeeze(0), prior_data, cfg['variance'])
         boxes = boxes * scale / resize
+
+        showboxes(image_path, boxes, max_boxes=50)#max_break=100)
+
         boxes = boxes.cpu().numpy()
+
         scores = conf.squeeze(0).data.cpu().numpy()[:, 1]
         landms = decode_landm(landms.data.squeeze(0), prior_data, cfg['variance'])
         scale1 = torch.Tensor([img.shape[3], img.shape[2], img.shape[3], img.shape[2],
@@ -122,12 +162,14 @@ if __name__ == '__main__':
         boxes = boxes[inds]
         landms = landms[inds]
         scores = scores[inds]
+        showboxes(image_path, boxes)
 
         # keep top-K before NMS
         order = scores.argsort()[::-1][:args.top_k]
         boxes = boxes[order]
         landms = landms[order]
         scores = scores[order]
+        showboxes(image_path, boxes)
 
         # do NMS
         dets = np.hstack((boxes, scores[:, np.newaxis])).astype(np.float32, copy=False)
@@ -163,6 +205,6 @@ if __name__ == '__main__':
                 cv2.circle(img_raw, (b[13], b[14]), 1, (255, 0, 0), 4)
             # save image
 
-            name = "test.jpg"
+            name = osp.basename(image_path)
             cv2.imwrite(name, img_raw)
 
