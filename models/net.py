@@ -60,7 +60,7 @@ class SSH(nn.Module):
 
         conv7X7_2 = self.conv7X7_2(conv5X5_1)
         conv7X7 = self.conv7x7_3(conv7X7_2)
-
+        # pylint: disable=no-member
         out = torch.cat([conv3X3, conv5X5, conv7X7], dim=1)
         out = F.relu(out)
         return out

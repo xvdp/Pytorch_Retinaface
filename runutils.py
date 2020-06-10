@@ -5,30 +5,53 @@ import sys
 import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
-from PIL import Image
+BACKENDS = []
 try:
-    import accimage # its a bit faster
-    _backend = "accimg"
+    import accimage
+    _backend = "accimage"
+    BACKENDS.append("accimage")
+except:
+    pass
+try:
+    from PIL import Image
+    BACKENDS.append("pil")
+except:
+    pass
+try:
+    import cv2
+    BACKENDS.append("cv2")
 except:
     pass
 
+# pylint: disable=no-member
+# pylint: disable=not-callable
+
 def open_accimg(name, debug=False):
-    out=None
+    out = None
     if 'accimage' in sys.modules:
         _im = accimage.Image(name)
         out = np.zeros([_im.channels, _im.height, _im.width], dtype=np.uint8)
         _im.copyto(out)
         if debug:
-            print("using accimg")
+            print("using accimage")
     return out
 
 def open_pilimg(name, debug=False):
-    out=None
+    out = None
     if 'PIL.Image'in sys.modules:
-        _im = Image.open(name)
-        out = np.frombuffer(_im.tobytes(), dtype=np.uint8).reshape(len(_im.getbands()), *_im.size[::-1])
+        out = np.array(Image.open(name)).transpose(2, 0, 1)
+        out = np.ascontiguousarray(out)
         if debug:
-            print("using pil")
+            print("using PIL")
+    return out
+
+def open_cv2(name, debug=False):
+    out = None
+    if 'cv2'in sys.modules:
+        out = cv2.imread(name, cv2.IMREAD_COLOR).transpose(2, 0, 1)
+        out = np.ascontiguousarray(out)
+        if debug:
+            print("using cv2")
     return out
 
 def open_tensor(name, dtype="float32", device="cuda", normed=False, center=None, backend=None, debug=False):
@@ -37,26 +60,29 @@ def open_tensor(name, dtype="float32", device="cuda", normed=False, center=None,
         name    (str) valid filename string
         dtype   (str [float32]) in ("uint8", "float16", "float32", "float64")
         normed  (bool [False]) if True out/=255.
-        center  (tuple [None]) 
+        center  (tuple [None])
     Open Torch tensor without transposing
     """
+
     _dtypes = ("uint8", "float16", "float32", "float64")
     assert dtype in _dtypes, "only %s accepted"%str(_dtypes)
     dtype = torch.__dict__[dtype]
     _norm = 1.0
 
     out = None
-    if backend is None or backend == "accimg" and 'accimage' in sys.modules:
+    if (backend is None or backend[0].lower() == "a") and 'accimage' in sys.modules:
         try:
             out = open_accimg(name, debug=debug)
+            backend = "accimage"
         except:
-            print("accimg could not open file")
+            print("accimage could not open file")
+    elif backend[0].lower() == "c" and 'cv2' in sys.modules:
+        out = open_cv2(name, debug=debug)
+        backend = "cv2"
 
     if out is None:
-        try:
-            out = open_pilimg(name, debug=debug)
-        except:
-            print("pil could not open file")
+        out = open_pilimg(name, debug=debug)
+        backend = "pil"
 
     out = torch.from_numpy(out).to(device=device).unsqueeze(0).to(dtype=dtype)
     if normed and dtype != torch.uint8:
@@ -118,6 +144,6 @@ def load_model(model, pretrained_path, device="cuda", verbose=False):
         pretrained_dict = remove_prefix(pretrained_dict['state_dict'], 'module.')
     else:
         pretrained_dict = remove_prefix(pretrained_dict, 'module.')
-    check_keys(model, pretrained_dict)
+    check_keys(model, pretrained_dict, verbose=verbose)
     model.load_state_dict(pretrained_dict, strict=False)
     return model

@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-
+# pylint: disable=no-member
 
 def point_form(boxes):
     """ Convert prior_boxes to (xmin, ymin, xmax, ymax)

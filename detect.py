@@ -32,6 +32,10 @@ parser.add_argument('--numtests', default=1, type=int, help='number of tests')
 parser.add_argument('--image', default=1, type=str, help='image name')
 args = parser.parse_args()
 
+
+# pylint: disable=no-member
+# pylint: disable=not-callable
+
 def showboxes(image, bboxes, max_boxes=5000, max_break=None):
     _mod = len(bboxes)//max_boxes + 1
     
