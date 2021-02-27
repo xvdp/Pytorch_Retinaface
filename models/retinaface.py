@@ -26,7 +26,8 @@ class ClassHead(nn.Module):
 class BboxHead(nn.Module):
     def __init__(self, inchannels=512, num_anchors=3):
         super(BboxHead, self).__init__()
-        self.conv1x1 = nn.Conv2d(inchannels, num_anchors*4, kernel_size=(1, 1), stride=1, padding=0)
+        self.conv1x1 = nn.Conv2d(inchannels, num_anchors*4, kernel_size=(1, 1), stride=1,
+                                 padding=0)
 
     def forward(self, x):
         out = self.conv1x1(x)
@@ -35,7 +36,7 @@ class BboxHead(nn.Module):
         return out.view(out.shape[0], -1, 4)
 
 class LandmarkHead(nn.Module):
-    def __init__(self,inchannels=512, num_anchors=3):
+    def __init__(self, inchannels=512, num_anchors=3):
         super(LandmarkHead, self).__init__()
         self.conv1x1 = nn.Conv2d(inchannels, num_anchors*10, kernel_size=(1, 1), stride=1,
                                  padding=0)
@@ -47,10 +48,20 @@ class LandmarkHead(nn.Module):
         return out.view(out.shape[0], -1, 10)
 
 class RetinaFace(nn.Module):
-    def __init__(self, cfg=None, phase='train'):
+    def __init__(self, cfg=None, phase='train', head_mode=7):
         """
-        :param cfg:  Network related settings.
-        :param phase: train or test.
+        Args
+            cfg:   Network related settings.
+            phase:  train or test.
+            mode:   int [7] bitmask remove outputs - kinda
+                7   loss_b  loss_c  loss_landm
+                6   0       loss_c  loss_landm
+                5   loss_b  0       loss_landm
+                4   0       0       loss_landm
+                3   loss_b  loss_c  0
+                2   0       loss_c  0
+                1   loss_b  0       0
+
         """
         super(RetinaFace, self).__init__()
         self.phase = phase
@@ -87,6 +98,8 @@ class RetinaFace(nn.Module):
         self.BboxHead = self._make_bbox_head(fpn_num=3, inchannels=cfg['out_channel'])
         self.LandmarkHead = self._make_landmark_head(fpn_num=3, inchannels=cfg['out_channel'])
 
+        self.head_mode = head_mode
+
     def _make_class_head(self, fpn_num=3, inchannels=64, anchor_num=2):
         classhead = nn.ModuleList()
         for i in range(fpn_num):
@@ -117,12 +130,28 @@ class RetinaFace(nn.Module):
         feature3 = self.ssh3(fpn[2])
         features = [feature1, feature2, feature3]
 
-        bbox_regressions = torch.cat([self.BboxHead[i](feature)
-                                      for i, feature in enumerate(features)], dim=1)
-        classifications = torch.cat([self.ClassHead[i](feature)
-                                      for i, feature in enumerate(features)], dim=1)
-        ldm_regressions = torch.cat([self.LandmarkHead[i](feature)
-                                      for i, feature in enumerate(features)], dim=1)
+        if self.head_mode & 1:
+            bbox_regressions = torch.cat([self.BboxHead[i](feature)
+                                          for i, feature in enumerate(features)], dim=1)
+        else:
+            with torch.no_grad():
+                bbox_regressions = torch.cat([self.BboxHead[i](feature)
+                                              for i, feature in enumerate(features)], dim=1)
+
+        if self.head_mode & 2:
+            classifications = torch.cat([self.ClassHead[i](feature)
+                                         for i, feature in enumerate(features)], dim=1)
+        else:
+            with torch.no_grad():
+                classifications = torch.cat([self.ClassHead[i](feature)
+                                             for i, feature in enumerate(features)], dim=1)      
+        if self.head_mode & 4:
+            ldm_regressions = torch.cat([self.LandmarkHead[i](feature)
+                                         for i, feature in enumerate(features)], dim=1)
+        else:
+            with torch.no_grad():
+                ldm_regressions = torch.cat([self.LandmarkHead[i](feature)
+                                             for i, feature in enumerate(features)], dim=1)
 
         if self.phase == 'train':
             output = (bbox_regressions, classifications, ldm_regressions)

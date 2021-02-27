@@ -3,7 +3,7 @@ import numpy as np
 import random
 from utils.box_utils import matrix_iof
 
-
+# pylint: disable=no-member
 def _crop(image, boxes, labels, landm, img_dim):
     height, width, _ = image.shape
     pad_image_flag = True

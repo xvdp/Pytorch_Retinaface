@@ -91,7 +91,7 @@ def train():
     epoch = 0 + args.resume_epoch
     print('Loading Dataset...')
 
-    dataset = WiderFaceDetection( training_dataset,preproc(img_dim, rgb_mean))
+    dataset = WiderFaceDetection(training_dataset, preproc(img_dim, rgb_mean))
 
     epoch_size = math.ceil(len(dataset) / batch_size)
     max_iter = max_epoch * epoch_size

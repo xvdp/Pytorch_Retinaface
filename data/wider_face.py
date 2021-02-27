@@ -1,17 +1,20 @@
-import os
-import os.path
-import sys
+""" slight modifications to original to avoid dataset duplication:
+        add relative_path, and osp.abspath()
+"""
+import os.path as osp
 import torch
 import torch.utils.data as data
 import cv2
 import numpy as np
 
+# pylint: disable=no-member
 class WiderFaceDetection(data.Dataset):
-    def __init__(self, txt_path, preproc=None):
+    def __init__(self, txt_path, preproc=None, relative_path='images/'):
         self.preproc = preproc
         self.imgs_path = []
         self.words = []
-        f = open(txt_path,'r')
+        assert osp.isfile(txt_path), "label data not found <%s>"%txt_path
+        f = open(txt_path, 'r')
         lines = f.readlines()
         isFirst = True
         labels = []
@@ -25,7 +28,8 @@ class WiderFaceDetection(data.Dataset):
                     self.words.append(labels_copy)
                     labels.clear()
                 path = line[2:]
-                path = txt_path.replace('label.txt','images/') + path
+                path = osp.abspath(txt_path.replace('label.txt', relative_path) + path)
+                assert osp.isfile(path), "folder not found <%s>"%path
                 self.imgs_path.append(path)
             else:
                 line = line.split(' ')

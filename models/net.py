@@ -6,7 +6,7 @@ import torchvision.models as models
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-def conv_bn(inp, oup, stride = 1, leaky = 0):
+def conv_bn(inp, oup, stride=1, leaky=0):
     return nn.Sequential(
         nn.Conv2d(inp, oup, 3, stride, 1, bias=False),
         nn.BatchNorm2d(oup),
@@ -30,11 +30,11 @@ def conv_dw(inp, oup, stride, leaky=0.1):
     return nn.Sequential(
         nn.Conv2d(inp, inp, 3, stride, 1, groups=inp, bias=False),
         nn.BatchNorm2d(inp),
-        nn.LeakyReLU(negative_slope= leaky,inplace=True),
+        nn.LeakyReLU(negative_slope=leaky, inplace=True),
 
         nn.Conv2d(inp, oup, 1, 1, 0, bias=False),
         nn.BatchNorm2d(oup),
-        nn.LeakyReLU(negative_slope= leaky,inplace=True),
+        nn.LeakyReLU(negative_slope=leaky, inplace=True),
     )
 
 class SSH(nn.Module):
@@ -67,16 +67,16 @@ class SSH(nn.Module):
 
 class FPN(nn.Module):
     def __init__(self,in_channels_list,out_channels):
-        super(FPN,self).__init__()
+        super(FPN, self).__init__()
         leaky = 0
         if (out_channels <= 64):
             leaky = 0.1
-        self.output1 = conv_bn1X1(in_channels_list[0], out_channels, stride = 1, leaky = leaky)
-        self.output2 = conv_bn1X1(in_channels_list[1], out_channels, stride = 1, leaky = leaky)
-        self.output3 = conv_bn1X1(in_channels_list[2], out_channels, stride = 1, leaky = leaky)
+        self.output1 = conv_bn1X1(in_channels_list[0], out_channels, stride=1, leaky=leaky)
+        self.output2 = conv_bn1X1(in_channels_list[1], out_channels, stride=1, leaky=leaky)
+        self.output3 = conv_bn1X1(in_channels_list[2], out_channels, stride=1, leaky=leaky)
 
-        self.merge1 = conv_bn(out_channels, out_channels, leaky = leaky)
-        self.merge2 = conv_bn(out_channels, out_channels, leaky = leaky)
+        self.merge1 = conv_bn(out_channels, out_channels, leaky=leaky)
+        self.merge2 = conv_bn(out_channels, out_channels, leaky=leaky)
 
     def forward(self, input):
         # names = list(input.keys())
