@@ -1,6 +1,11 @@
 # XVDP changes
 * added detect.py file wrapping pytorch scripted detection in test_widerface.py
-* added jupyter tests to validate on in the wild data.
+* added jupyter tests
+* modified multibox_loss.py to analyze each loss independently
+* modified wider_face.py to point to local folder
+
+This repo is missing Section 3.2 of paper
+  Dense Regression Branch
 
 # RetinaFace in PyTorch
 
